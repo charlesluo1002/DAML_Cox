@@ -156,7 +156,7 @@ TATE_AIPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100,T_AZ = '
   # plot(points, sapply(points, calc_PL))
   # plot(points, sapply(points, function(x) calc_U(calc_A_bar(x))))
   # plot(points, sapply(points, function(x) calc_dU(calc_A_bar(x))))
-
+  
   diff = 999
   iter_count = 0
   while(diff > threshold){
@@ -221,7 +221,7 @@ TATE_IPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = '
     # Lambda_c = exp(A*model$coefficients) %*% t(Lambda0_c) # n x n_res  (sample x time)
     # lambda_c = t(apply(Lambda_c, 1, function(x) c(x[1], diff(x))))    # n x n_res  (sample x time)
     # S_c = exp(-Lambda_c)    # n x n_res  (sample x time)
-
+    
     S_c = data.frame(matrix(0, nrow = n_res, ncol = n))
     model0 = survfit(Surv(X[A==0], 1-Delta[A==0])~1, timefix = F)
     model1 = survfit(Surv(X[A==1], 1-Delta[A==1])~1, timefix = F)
@@ -289,7 +289,7 @@ simulate <- function(T_AZ_sim = 'exp-AZ', C_AZ_sim = 'exp-AZ', n = 1000, p = 2, 
   if (T_AZ_sim == 'llogis') t = exp(-0.4*A + as.vector(Z%*%c(-0.4,-0.4)) + 0.3*rlogis(n))
   if (T_AZ_sim == 'piecewise-exp'){
     t = sapply(1:n, function(x) exp_cdfsim(n=1, endtime=9999, 
-        theta=c(exp(A[x]), exp(0.2*Z[x,1]), exp(0.2*Z[x,2])) ,tau=c(0.2, 0.4))$time)
+                                           theta=c(exp(A[x]), exp(0.2*Z[x,1]), exp(0.2*Z[x,2])) ,tau=c(0.2, 0.4))$time)
   }
   if (T_AZ_sim == 'exp-lnorm'){
     t = rep(0,n)
@@ -307,7 +307,7 @@ simulate <- function(T_AZ_sim = 'exp-AZ', C_AZ_sim = 'exp-AZ', n = 1000, p = 2, 
   if (C_AZ_sim == 'exp-AZ') c = -log(runif(n))/exp(0.6*A - as.vector(Z%*%c(0.2,-0.2)))
   if (C_AZ_sim == 'piecewise-exp'){
     c = sapply(1:n, function(x) exp_cdfsim(n=1, endtime=9999, 
-        theta=c(exp(-0.2*A[x]), exp(0.8*A[x] + 0.4*Z[x,1] + 0.4*Z[x,2])) ,tau=0.35)$time)
+                                           theta=c(exp(-0.2*A[x]), exp(0.8*A[x] + 0.4*Z[x,1] + 0.4*Z[x,2])) ,tau=0.35)$time)
   }
   if (C_AZ_sim == 'exp-lnorm') {
     # c = exp(-0.5*A + as.vector(Z%*%c(-0.3, -0.3)) + 0.2*rlogis(n))
@@ -360,7 +360,7 @@ one_setting_simulation = function(runs = 500, n_sim = 1000, p = 2, tau = 0.7, T_
   estimators = c('aipw-llogis-cox', 'aipw-spline-cox', 'aipw-rsf-cox', 'aipw-spline-spline', 'aipw-rsf-rsf', 'ipw-az', 'ipw-a', 'ipw-1', 'pl')
   beta_estimates = model_se = boot_se = 
     matrix(0, nrow = runs_max, ncol = length(estimators), dimnames = list(NULL, estimators))
-
+  
   i=0
   each_core = function(){
     
