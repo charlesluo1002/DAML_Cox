@@ -7,7 +7,7 @@ library(flexsurv)
 # library(aalen)
 # library(GBMCI)
 # beta0 = 0; threshold = 1e-6; max_iter = 100; T_AZ = 'Spline'; C_AZ = 'Cox'
-TATE_AIPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100,T_AZ = 'Cox', C_AZ = 'Cox', remove.last = T, min.S = 1e-4){
+ALHR_AIPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100,T_AZ = 'Cox', C_AZ = 'Cox', remove.last = T, min.S = 1e-4){
   # inputs:
   # data: nx(p+3) matrix, first 3 columns (X, Delta, A) are fixed, the rest are baseline covariates Z
   #   X - nx1, the censored event time for each patient
@@ -179,7 +179,7 @@ TATE_AIPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100,T_AZ = '
 }
 
 
-TATE_IPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = 'exp-AZ', remove.last = T, min.S = 1e-4){
+ALHR_IPW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = 'exp-AZ', remove.last = T, min.S = 1e-4){
   # inputs:
   # data: nx(p+3) matrix, first 3 columns (X, Delta, A) are fixed, the rest are baseline covariates Z
   #   X - nx1, the censored event time for each patient
@@ -371,14 +371,14 @@ one_setting_simulation = function(runs = 500, n_sim = 1000, p = 2, tau = 0.7, T_
     errored <<- F
     tryCatch({
       data = all_data[(1 + (i-1)*n_sim):(i*n_sim),]
-      beta_estimates[i,1] = TATE_AIPW(data = data, T_AZ = 'llogis', C_AZ = 'Cox', min.S=min_S)
-      beta_estimates[i,2] = TATE_AIPW(data = data, T_AZ = 'Spline', C_AZ = 'Cox', min.S=min_S)
-      beta_estimates[i,3] = TATE_AIPW(data = data, T_AZ = 'RSF', C_AZ = 'Cox', min.S=min_S)
-      beta_estimates[i,4] = TATE_AIPW(data = data, T_AZ = 'Spline', C_AZ = 'Spline', min.S=min_S)
-      beta_estimates[i,5] = TATE_AIPW(data = data, T_AZ = 'RSF', C_AZ = 'RSF', min.S=min_S)  
-      beta_estimates[i,6] = TATE_IPW(data = data, C_AZ = 'exp-AZ', min.S=min_S)
-      beta_estimates[i,7] = TATE_IPW(data = data, C_AZ = 'exp-A', min.S=min_S)
-      beta_estimates[i,8] = TATE_IPW(data = data, C_AZ = 'exp', min.S=min_S)
+      beta_estimates[i,1] = ALHR_AIPW(data = data, T_AZ = 'llogis', C_AZ = 'Cox', min.S=min_S)
+      beta_estimates[i,2] = ALHR_AIPW(data = data, T_AZ = 'Spline', C_AZ = 'Cox', min.S=min_S)
+      beta_estimates[i,3] = ALHR_AIPW(data = data, T_AZ = 'RSF', C_AZ = 'Cox', min.S=min_S)
+      beta_estimates[i,4] = ALHR_AIPW(data = data, T_AZ = 'Spline', C_AZ = 'Spline', min.S=min_S)
+      beta_estimates[i,5] = ALHR_AIPW(data = data, T_AZ = 'RSF', C_AZ = 'RSF', min.S=min_S)  
+      beta_estimates[i,6] = ALHR_IPW(data = data, C_AZ = 'exp-AZ', min.S=min_S)
+      beta_estimates[i,7] = ALHR_IPW(data = data, C_AZ = 'exp-A', min.S=min_S)
+      beta_estimates[i,8] = ALHR_IPW(data = data, C_AZ = 'exp', min.S=min_S)
       beta_estimates[i,9] = as.numeric(coxph(Surv(data[,1], data[,2])~data[,3], timefix = F)$coefficients)
       if (i %% 100 == 0) cat(paste0(i, ' runs done.\n'))
     },
