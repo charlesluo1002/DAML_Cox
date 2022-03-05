@@ -1,9 +1,9 @@
-# Doubly Robust estimation of Time Average Treatment Effect
+# Doubly Robust estimation of Average Log Hazard Ratio
 
-## DR-TATE
+## DR-ALHR
 
-TATE.R - 
-Implements the doubly robust AIPW estimator for TATE, allows both parametric/semi-parametric and non-parametric/machine learning methods for the working models. Estimating equation is solved using Newton-Ralphson.
+ALHR.R - 
+Implements the doubly robust AIPW estimator for Average Log Hazard Ratio, allows both parametric/semi-parametric and non-parametric/machine learning methods for the working models. Estimating equation is solved using Newton-Ralphson.
 
 
 ## Simulation
