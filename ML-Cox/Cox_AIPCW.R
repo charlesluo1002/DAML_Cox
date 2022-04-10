@@ -1,3 +1,10 @@
+library(survival)
+library(parallel)
+library(randomForestSRC)
+library(polspline)
+library(flexsurv)
+library(actuar)
+
 Cox_AIPCW <- function(data, beta0 = 0, threshold = 1e-8, max_iter = 100,T_AZ = 'Spline', C_AZ = 'RSF', min.S = 1e-2, remove.last = T, tau = 1, k = 5){
   # inputs:
   # data: nx(3 + p) matrix, first 3 columns (X, Delta, A) are fixed, the rest are baseline covariates Z
@@ -167,12 +174,6 @@ Cox_AIPCW <- function(data, beta0 = 0, threshold = 1e-8, max_iter = 100,T_AZ = '
     min.S = calc_min.S(min.S.base)
   }
   
-  # points = seq(-10,10,length.out = 100)
-  # plot(points, sapply(points, function(x) calc_PL(x)))
-  # plot(points, sapply(points, function(x) calc_U(calc_A_bar(x))))
-  # plot(points, sapply(points, function(x) calc_dU(calc_A_bar(x))))
-  # plot(points, sapply(points, function(x) min(calc_B2(x))))
-  
   # model se
   A_bar = calc_A_bar(beta)
   K = mean(rowSums((dB1   -   t(t(exp(beta*A) * (Y/S_c + J*S_t))[-n_res,]/calc_B2(beta)*colMeans(dB1)))*outer(A, A_bar, '-'))^2)
@@ -180,7 +181,6 @@ Cox_AIPCW <- function(data, beta0 = 0, threshold = 1e-8, max_iter = 100,T_AZ = '
   model_se = sqrt(K/nu^2/n)
   return(list(beta = beta, model_se = model_se, min.S = min.S))
 }
-
 
 
 Cox_IPCW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = 'Cox', remove.last = T, min.S = 1e-2, tau = 1){
@@ -207,14 +207,6 @@ Cox_IPCW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = '
   model_se = 0
   Y = t(sapply(event_rank, function(x) c(rep(1,x), rep(0,n_res-x))))   # n x n_res  (sample x time)
   dNt = t(sapply(event_rank, function(x) tabulate(x, nbins = n_res))) * Delta    # n x n_res  (sample x time) 
-  if (C_AZ == 'cens1'){
-    model = coxph(Surv(X, Delta_c) ~ Z, timefix = F)
-    Lambda_c = exp(Z%*%model$coefficients) %*% t(basehaz(model, centered = F)$hazard)
-    S_c = exp(-Lambda_c)
-    S_c[,1] = ifelse(S_c[,1] == 0, 1, S_c[,1])
-    S_c[S_c==0] = NA
-    S_c = t(as.matrix(tidyr::fill(data.frame(t(S_c)), names(data.frame(t(S_c))))))
-  }
   if (C_AZ == 'Spline'){
     model = hare(X, Delta_c, cbind(A,Z))
     S_c = 1 - sapply(sort(unique(X)), function(x) phare(q = x, cov = cbind(A,Z), fit = model))
@@ -297,117 +289,4 @@ Cox_IPCW <- function(data, beta0 = 0, threshold = 1e-6, max_iter = 100, C_AZ = '
   model_se = sqrt(sum(U.star^2)/n/dU^2 / n)
   return(list(beta = beta, model_se = model_se, min.S = min.S))
 }
-
-
-simulate <- function(Scenario = 1, beta_true = -1, n = 1000){
-  n_original = n
-  n = ceiling(n*1.01)
-  A = rbinom(n, 1, 0.5)
-  
-  if (Scenario == 1){
-    eps = runif(n,-1,1)
-    Z1 = 0.5*eps + rnorm(n,0, sd = 1) # max is 0.5 + 4 = 4.5
-    Z2 = eps^2 + rnorm(n,0, sd = 0.3) # max is 1+0.3*4 = 2.2
-    Z = cbind(Z1,Z2)
-    t = -log(0.5*eps+0.5)*exp(-beta_true*A)
-    c = -log(runif(n))/exp(-1 + as.vector(Z%*%c(0, 2)))
-  }
-  if (Scenario == 2){
-    eps = runif(n,-1,1)
-    Z1 = 0.5*eps + rnorm(n,0, sd = 1)
-    Z2 = eps^2 + rnorm(n,0, sd = 0.3) 
-    Z = cbind(Z1,Z2)
-    t = -log(0.5*eps+0.5)*exp(-beta_true*A)
-    c = rep(0,n)
-    c[Z1>0] = exp(0 - 0.2*A[Z1>0] + as.vector(sqrt(abs(Z[Z1>0,]))%*%c(0, -2)) + 0.3*rlnorm(sum(Z[,1]>0)))
-    c[Z1<=0] = exp(2.4 - 0.3*A[Z1<=0] + as.vector(sqrt(abs(Z[Z1<=0,]))%*%c(0.5, 0.5)) - 1*rlnorm(sum(Z[,1]<=0)))
-
-  X = pmin(t,c)
-  Delta = 1*(t<c)
-  duplicated_index = unique(c(which(duplicated(X)), which(duplicated(t)), which(duplicated(c))))
-  if (length(duplicated_index) != 0) {
-    cat(paste(length(duplicated_index) ,'duplicates detected.\n'))
-    return(cbind(t, c, X, Delta, A, Z)[-duplicated_index,][1:n_original,])
-  }else return(cbind(t, c, X, Delta, A, Z)[1:n_original,])
-}
-
-
-one_setting_simulation = function(n_sim = 1000, tau = 1, Scenario = 1, beta_true = -1, id = 1){
-  set.seed(id)
-  data = simulate(n = n_sim, Scenario = Scenario, beta_true = beta_true)[,-(1:2)]
-  data[,2] = data[,2]*(data[,1] < tau)
-  data[,1] = ifelse(data[,1] < tau, data[,1], tau)
-  
-  estimators = c('AIPCW-Cox-Cox', 'AIPCW-Cox-spline', 'AIPCW-Cox-rsf', 'AIPCW-spline-Cox', 'AIPCW-rsf-Cox', 'AIPCW-spline-spline', 'AIPCW-rsf-rsf', 'IPCW-Cox', 'IPCW-spline','IPCW-rsf', 'IPCW-A', 'IPCW-1', 'MPLE')
-  beta_est = model_se = min_S_list = rep(0, length(estimators))
-  # beta0 = beta_true;  T_AZ = 'fail1'; C_AZ = 'cens1';threshold = 1e-8; max_iter = 100; remove.last = T; min.S = 0.007; tau = tau
-  if (IPCW_only == T){
-    res8 = Cox_IPCW(data = data, C_AZ = 'Cox' , beta0 = beta_true,tau = tau)
-    res9 = Cox_IPCW(data = data, C_AZ = 'Spline' , beta0 = beta_true,tau = tau)
-    res10 = Cox_IPCW(data = data, C_AZ = 'RSF' , beta0 = beta_true,tau = tau)
-    res11 = Cox_IPCW(data = data, C_AZ = 'A' , beta0 = beta_true,tau = tau)
-    res12 = Cox_IPCW(data = data, C_AZ = '1' , beta0 = beta_true,tau = tau)
-    cox.model = coxph(Surv(data[,1], data[,2])~data[,3], timefix = F)
-    beta_est[13] = as.numeric(cox.model$coefficient)
-    model_se[13] = as.numeric(summary(cox.model)$coefficients[3])
-    for (i in 8:(length(estimators) - 1)){
-      eval(parse(text = paste0('beta_est[',i,'] = res',i,'$beta')))
-      eval(parse(text = paste0('model_se[',i,'] = res',i,'$model_se')))
-      eval(parse(text = paste0('min_S_list[',i,'] = res',i,'$min.S')))
-    }
-  }else{
-    res1 = Cox_AIPCW(data = data, T_AZ = 'Cox', C_AZ = 'Cox', beta0 = beta_true,tau = tau)
-    res2 = Cox_AIPCW(data = data, T_AZ = 'Cox',C_AZ = 'Spline', beta0 = beta_true,tau = tau)
-    res3 = Cox_AIPCW(data = data, T_AZ = 'Cox', C_AZ = 'RSF',beta0 = beta_true,tau = tau)
-    res4 = Cox_AIPCW(data = data, T_AZ = 'Spline',C_AZ = 'Cox',beta0 = beta_true,tau = tau)
-    res5 = Cox_AIPCW(data = data, T_AZ = 'RSF',   C_AZ = 'Cox', beta0 = beta_true,tau = tau)
-    res6 = Cox_AIPCW(data = data, T_AZ = 'Spline', C_AZ = 'Spline', beta0 = beta_true,tau = tau)
-    res7 = Cox_AIPCW(data = data, T_AZ = 'RSF',   C_AZ = 'RSF', beta0 = beta_true,tau = tau)
-    res8 = Cox_IPCW(data = data,  C_AZ = 'Cox' ,beta0 = beta_true,tau = tau)
-    res9 = Cox_IPCW(data = data,  C_AZ = 'Spline',beta0 = beta_true,tau = tau)
-    res10 = Cox_IPCW(data = data, C_AZ = 'RSF' ,  beta0 = beta_true,tau = tau)
-    res11 = Cox_IPCW(data = data, C_AZ = 'A' ,   beta0 = beta_true,tau = tau)
-    res12 = Cox_IPCW(data = data, C_AZ = '1' ,   beta0 = beta_true,tau = tau)
-    cox.model = coxph(Surv(data[,1], data[,2])~data[,3], timefix = F)
-    beta_est[13] = as.numeric(cox.model$coefficient)
-    model_se[13] = as.numeric(summary(cox.model)$coefficients[3])
-    for (i in 1:(length(estimators) - 1)){
-      eval(parse(text = paste0('beta_est[',i,'] = res',i,'$beta')))
-      eval(parse(text = paste0('model_se[',i,'] = res',i,'$model_se')))
-      eval(parse(text = paste0('min_S_list[',i,'] = res',i,'$min.S')))
-    }
-  }
-  # calculate CP using model_se
-  model.ci.low = beta_est - model_se*qnorm(0.975)
-  model.ci.high = beta_est + model_se*qnorm(0.975)
-  model.coverred = (model.ci.low < beta_true)*(model.ci.high > beta_true)
-  res = c(beta_true, beta_est,model_se, model.coverred, min_S_list)
-  names(res) = c('beta_true', rep(estimators,4))
-  return(res)
-}
-
-############
-library(survival)
-library(parallel)
-library(randomForestSRC)
-library(polspline)
-library(flexsurv)
-library(actuar)
-library(tictoc)
-
-IPCW_only = F
-n0 = 500
-tau0 = 1
-beta_true0 = -1
-tic()
-tryCatch({Script_ID = as.numeric(commandArgs(trailingOnly=TRUE))})
-if (!exists('Script_ID') | length(Script_ID) == 0) Script_ID = 1
-results1 = one_setting_simulation(n_sim = n0, tau = tau0, Scenario = 1, beta_true = beta_true0, id = Script_ID)
-results2 = one_setting_simulation(n_sim = n0, tau = tau0, Scenario = 2, beta_true = beta_true0, id = Script_ID)
-results3 = results1;results4 = results2
-toc()
-final.output = c(results1, results2)
-saveRDS(final.output, file = paste0('test_', Script_ID, '.rds'))
-
-
 
