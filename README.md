@@ -1,4 +1,4 @@
-# Inference for hazard ratio under informative censoring using machine learning
+# Doubly Robust Inference for Hazard Ratio under Informative Censoring
 
 ## Cox_AIPCW
 
